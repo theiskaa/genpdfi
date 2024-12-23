@@ -97,7 +97,7 @@ impl From<u32> for Mm {
 
 impl From<f32> for Mm {
     fn from(mm: f32) -> Mm {
-        Mm(mm.into())
+        Mm(mm)
     }
 }
 
@@ -133,8 +133,10 @@ impl From<Mm> for printpdf::Pt {
 /// [`Paragraph`]: elements/struct.Paragraph.html
 /// [`Image`]: elements/struct.Image.html
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Default)]
 pub enum Alignment {
     /// Left-flushed.
+    #[default]
     Left,
     /// Right-flushed.
     Right,
@@ -142,11 +144,6 @@ pub enum Alignment {
     Center,
 }
 
-impl Default for Alignment {
-    fn default() -> Alignment {
-        Alignment::Left
-    }
-}
 
 /// A position on a PDF layer, measured in millimeters.
 ///

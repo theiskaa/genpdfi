@@ -414,7 +414,7 @@ impl<'p> Layer<'p> {
     {
         self.data
             .layer
-            .write_positioned_codepoints(positions.into_iter().zip(codepoints.into_iter()));
+            .write_positioned_codepoints(positions.into_iter().zip(codepoints));
     }
 
     /// Transforms the given position that is relative to the upper left corner of the layer to a
@@ -750,7 +750,7 @@ impl<'f, 'p> TextSection<'f, 'p> {
         let codepoints = if font.is_builtin() {
             encode_win1252(s)?
         } else {
-            font.glyph_ids(&self.font_cache, s.chars())
+            font.glyph_ids(self.font_cache, s.chars())
         };
 
         let font = self
@@ -827,7 +827,7 @@ impl<'f, 'p> TextSection<'f, 'p> {
         let codepoints = if font.is_builtin() {
             encode_win1252(text)?
         } else {
-            font.glyph_ids(&self.font_cache, text.chars())
+            font.glyph_ids(self.font_cache, text.chars())
         };
 
         let pdf_font = self

@@ -470,7 +470,7 @@ impl<'s> StyledStr<'s> {
     ///
     /// [`FontCache`]: ../fonts/struct.FontCache.html
     pub fn width(&self, font_cache: &fonts::FontCache) -> Mm {
-        self.style.str_width(font_cache, &self.s)
+        self.style.str_width(font_cache, self.s)
     }
 }
 
