@@ -17,7 +17,7 @@ lopdf = "0.26"
 rusttype = "0.8"
 
 [dependencies.image]
-version = "0.23.12"
+version = "0.24.9"
 default-features = false
 optional = true
 

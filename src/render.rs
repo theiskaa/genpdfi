@@ -332,14 +332,21 @@ impl<'p> Layer<'p> {
     ) {
         let dynamic_image = printpdf::Image::from_dynamic_image(image);
         let position = self.transform_position(position);
+        let rotation = Some(printpdf::ImageRotation {
+            angle_ccw_degrees: rotation.degrees,
+            rotation_center_x: printpdf::Px(dynamic_image.image.width.0 / 2),
+            rotation_center_y: printpdf::Px(dynamic_image.image.height.0 / 2),
+        });
         dynamic_image.add_to_layer(
             self.data.layer.clone(),
-            Some(position.x.into()),
-            Some(position.y.into()),
-            rotation.into(),
-            Some(scale.x),
-            Some(scale.y),
-            dpi,
+            printpdf::ImageTransform {
+                translate_x: Some(position.x.into()),
+                translate_y: Some(position.y.into()),
+                rotate: rotation,
+                scale_x: Some(scale.x),
+                scale_y: Some(scale.y),
+                dpi
+            }
         );
     }
 

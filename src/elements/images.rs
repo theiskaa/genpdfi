@@ -32,7 +32,7 @@ use crate::{Alignment, Context, Element, Mm, Position, RenderResult, Rotation, S
 /// let image = elements::Image::from_path("examples/images/test_image.jpg")
 ///       .expect("Failed to load test image")
 ///       .with_alignment(genpdfi::Alignment::Center) // Center the image on the page.
-///       .with_scale(genpdfi::Scale::new(0.5, 2)); // Squeeze and then stretch upwards.
+///       .with_scale(genpdfi::Scale::new(0.5, 2.0)); // Squeeze and then stretch upwards.
 /// ```
 ///
 /// [`image`]: https://lib.rs/crates/image

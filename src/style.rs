@@ -12,8 +12,8 @@
 //! ```
 //! use genpdfi::style;
 //! let style = style::Style::new().bold();
-//! let ss1 = style::StyledStr::new("bold", style);
-//! let ss2 = style::StyledStr::new("red", style::Color::Rgb(255, 0, 0));
+//! let ss1 = style::StyledStr::new("bold", style, None);
+//! let ss2 = style::StyledStr::new("red", style::Color::Rgb(255, 0, 0), None);
 //! ```
 //!
 //! [`Color`]: enum.Color.html
@@ -370,8 +370,8 @@ impl<T: Into<Style>> iter::FromIterator<T> for Style {
 ///
 /// ```
 /// use genpdfi::style;
-/// let ss1 = style::StyledString::new("bold".to_owned(), style::Effect::Bold);
-/// let ss2 = style::StyledString::new("red".to_owned(), style::Color::Rgb(255, 0, 0));
+/// let ss1 = style::StyledString::new("bold".to_owned(), style::Effect::Bold, None);
+/// let ss2 = style::StyledString::new("red".to_owned(), style::Color::Rgb(255, 0, 0), None);
 /// ```
 ///
 /// [`Style`]: struct.Style.html
@@ -436,8 +436,8 @@ impl<'a> From<&'a str> for StyledString {
 ///
 /// ```
 /// use genpdfi::style;
-/// let ss1 = style::StyledStr::new("bold", style::Effect::Bold);
-/// let ss2 = style::StyledStr::new("red", style::Color::Rgb(255, 0, 0));
+/// let ss1 = style::StyledStr::new("bold", style::Effect::Bold, None);
+/// let ss2 = style::StyledStr::new("red", style::Color::Rgb(255, 0, 0), None);
 /// ```
 ///
 /// [`Style`]: struct.Style.html
@@ -498,8 +498,8 @@ impl<'s> From<&'s StyledString> for StyledStr<'s> {
 ///
 /// ```
 /// use genpdfi::style;
-/// let ss1 = style::StyledCow::new("bold", style::Effect::Bold);
-/// let ss2 = style::StyledCow::new("red".to_owned(), style::Color::Rgb(255, 0, 0));
+/// let ss1 = style::StyledCow::new("bold", style::Effect::Bold, None);
+/// let ss2 = style::StyledCow::new("red".to_owned(), style::Color::Rgb(255, 0, 0), None);
 /// ```
 ///
 /// [`Style`]: struct.Style.html

@@ -440,7 +440,7 @@ impl<T: Into<StyledString>> iter::FromIterator<T> for Paragraph {
 ///
 /// ```
 /// // Draws 5 empty lines (calculating the line height using the current style)
-/// let b = genpdfi::elements::Break::new(5);
+/// let b = genpdfi::elements::Break::new(5.0);
 /// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Break {

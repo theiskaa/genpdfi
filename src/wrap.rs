@@ -138,8 +138,8 @@ fn split<'s>(
         let start = s.s[..idx].to_owned() + mark;
         let end = &s.s[idx..];
         Some((
-            style::StyledCow::new(start, s.style),
-            style::StyledCow::new(end, s.style),
+            style::StyledCow::new(start, s.style, None),
+            style::StyledCow::new(end, s.style, None),
         ))
     } else {
         None
