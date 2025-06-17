@@ -9,7 +9,7 @@
 //! the [`FontCache`][].  A [`FontFamily`][] is a collection of a regular, a bold, an italic and a
 //! bold italic font (raw data or cached).
 //!
-//! Add fonts to a document’s font cache by calling [`Document::add_font_family`][].  This method
+//! Add fonts to a document's font cache by calling [`Document::add_font_family`][].  This method
 //! returns a reference to the cached data that you then can use with the [`Style`][] struct to
 //! change the font family of an element.
 //!
@@ -61,9 +61,11 @@
 //! [`printpdf::IndirectFontRef`]: https://docs.rs/printpdf/0.3.2/printpdf/types/plugins/graphics/two_dimensional/font/struct.IndirectFontRef.html
 //! [Windows-1252]: https://en.wikipedia.org/wiki/Windows-1252
 
+use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::path;
+use std::sync::Arc;
 
 use crate::error::{Context as _, Error, ErrorKind};
 use crate::render;
@@ -72,7 +74,7 @@ use crate::Mm;
 
 /// Stores font data that can be referenced by a [`Font`][] or [`FontFamily`][].
 ///
-/// If you use the high-level interface provided by [`Document`][], you don’t have to access this
+/// If you use the high-level interface provided by [`Document`][], you don't have to access this
 /// type.  See the [module documentation](index.html) for details on the internals.
 ///
 /// [`Document`]: ../struct.Document.html
@@ -86,6 +88,8 @@ pub struct FontCache {
     // a font, but the default font is always loaded in new, so this options is always some
     // (outside of new).
     default_font_family: Option<FontFamily<Font>>,
+    // Cache to deduplicate embedded fonts by their data pointer
+    embedded_font_cache: HashMap<*const Vec<u8>, printpdf::IndirectFontRef>,
 }
 
 impl FontCache {
@@ -95,6 +99,7 @@ impl FontCache {
             fonts: Vec::new(),
             pdf_fonts: Vec::new(),
             default_font_family: None,
+            embedded_font_cache: HashMap::new(),
         };
         font_cache.default_font_family = Some(font_cache.add_font_family(default_font_family));
         font_cache
@@ -125,10 +130,23 @@ impl FontCache {
     /// reference to them.
     pub fn load_pdf_fonts(&mut self, renderer: &render::Renderer) -> Result<(), Error> {
         self.pdf_fonts.clear();
+        self.embedded_font_cache.clear(); // Clear cache for this document
+
         for font in &self.fonts {
             let pdf_font = match &font.raw_data {
                 RawFontData::Builtin(builtin) => renderer.add_builtin_font(*builtin)?,
-                RawFontData::Embedded(data) => renderer.add_embedded_font(&data)?,
+                RawFontData::Embedded(data) => {
+                    let data_ptr = Arc::as_ptr(data);
+
+                    // Check if we've already embedded this exact font data
+                    if let Some(cached_font_ref) = self.embedded_font_cache.get(&data_ptr) {
+                        cached_font_ref.clone()
+                    } else {
+                        let font_ref = renderer.add_embedded_font(data.as_ref())?;
+                        self.embedded_font_cache.insert(data_ptr, font_ref.clone());
+                        font_ref
+                    }
+                }
             };
             self.pdf_fonts.push(pdf_font);
         }
@@ -185,9 +203,33 @@ impl FontData {
         let raw_data = if let Some(builtin) = builtin {
             RawFontData::Builtin(builtin)
         } else {
-            RawFontData::Embedded(data.clone())
+            RawFontData::Embedded(Arc::new(data.clone()))
         };
         let rt_font = rusttype::Font::from_bytes(data).context("Failed to read rusttype font")?;
+        if rt_font.units_per_em() == 0 {
+            Err(Error::new(
+                "The font is not scalable",
+                ErrorKind::InvalidFont,
+            ))
+        } else {
+            Ok(FontData { rt_font, raw_data })
+        }
+    }
+
+    /// Creates a new FontData instance that shares the same underlying font data.
+    /// This method is optimized to avoid duplicating font data when creating multiple
+    /// FontData instances from the same source.
+    pub fn new_shared(
+        shared_data: Arc<Vec<u8>>,
+        builtin: Option<printpdf::BuiltinFont>,
+    ) -> Result<FontData, Error> {
+        let raw_data = if let Some(builtin) = builtin {
+            RawFontData::Builtin(builtin)
+        } else {
+            RawFontData::Embedded(shared_data.clone())
+        };
+        let rt_font = rusttype::Font::from_bytes(shared_data.to_vec())
+            .context("Failed to read rusttype font")?;
         if rt_font.units_per_em() == 0 {
             Err(Error::new(
                 "The font is not scalable",
@@ -219,7 +261,7 @@ impl FontData {
 #[derive(Clone, Debug)]
 enum RawFontData {
     Builtin(printpdf::BuiltinFont),
-    Embedded(Vec<u8>),
+    Embedded(Arc<Vec<u8>>),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -249,7 +291,7 @@ impl fmt::Display for FontStyle {
 
 /// A built-in font family.
 ///
-/// A PDF viewer typically supports three font families that don’t have to be embedded into the PDF
+/// A PDF viewer typically supports three font families that don't have to be embedded into the PDF
 /// file:  Times, Helvetica and Courier.
 ///
 /// See the [module documentation](index.html) for more information.
