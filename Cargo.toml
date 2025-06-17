@@ -1,6 +1,6 @@
 [package]
 name = "genpdfi"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Robin Krahl <robin.krahl@ireas.org>", "Ismael Sh <me@theiskaa.com>"]
 edition = "2018"
 description = "User-friendly PDF generator written in pure Rust"
