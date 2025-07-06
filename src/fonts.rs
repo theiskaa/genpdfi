@@ -451,11 +451,116 @@ impl Font {
     }
 
     fn char_h_metrics(&self, font_cache: &FontCache, c: char) -> rusttype::HMetrics {
-        font_cache
-            .get_rt_font(*self)
-            .glyph(c)
-            .scaled(self.scale)
-            .h_metrics()
+        // If this is a built-in font, use standardized metrics instead of system font metrics
+        if self.is_builtin {
+            self.builtin_char_h_metrics(c)
+        } else {
+            font_cache
+                .get_rt_font(*self)
+                .glyph(c)
+                .scaled(self.scale)
+                .h_metrics()
+        }
+    }
+
+    /// Returns standardized character metrics for built-in PDF fonts.
+    /// These values are based on the Adobe Font Metrics (AFM) for standard PDF fonts.
+    fn builtin_char_h_metrics(&self, c: char) -> rusttype::HMetrics {
+        let advance_width = match c {
+            // Standard character widths for Helvetica (in 1000ths of em)
+            ' ' => 0.278,       // space
+            '!' => 0.278,       // exclamation
+            '"' => 0.355,       // quotation
+            '#' => 0.556,       // hash
+            '$' => 0.556,       // dollar
+            '%' => 0.889,       // percent
+            '&' => 0.667,       // ampersand
+            '\'' => 0.191,      // apostrophe
+            '(' => 0.333,       // left paren
+            ')' => 0.333,       // right paren
+            '*' => 0.389,       // asterisk
+            '+' => 0.584,       // plus
+            ',' => 0.278,       // comma
+            '-' => 0.333,       // hyphen
+            '.' => 0.278,       // period
+            '/' => 0.278,       // slash
+            '0'..='9' => 0.556, // digits
+            ':' => 0.278,       // colon
+            ';' => 0.278,       // semicolon
+            '<' => 0.584,       // less than
+            '=' => 0.584,       // equals
+            '>' => 0.584,       // greater than
+            '?' => 0.556,       // question
+            '@' => 1.015,       // at sign
+            'A' => 0.667,       // A
+            'B' => 0.667,       // B
+            'C' => 0.722,       // C
+            'D' => 0.722,       // D
+            'E' => 0.667,       // E
+            'F' => 0.611,       // F
+            'G' => 0.778,       // G
+            'H' => 0.722,       // H
+            'I' => 0.278,       // I
+            'J' => 0.500,       // J
+            'K' => 0.667,       // K
+            'L' => 0.556,       // L
+            'M' => 0.833,       // M
+            'N' => 0.722,       // N
+            'O' => 0.778,       // O
+            'P' => 0.667,       // P
+            'Q' => 0.778,       // Q
+            'R' => 0.722,       // R
+            'S' => 0.667,       // S
+            'T' => 0.611,       // T
+            'U' => 0.722,       // U
+            'V' => 0.667,       // V
+            'W' => 0.944,       // W
+            'X' => 0.667,       // X
+            'Y' => 0.667,       // Y
+            'Z' => 0.611,       // Z
+            '[' => 0.278,       // left bracket
+            '\\' => 0.278,      // backslash
+            ']' => 0.278,       // right bracket
+            '^' => 0.469,       // caret
+            '_' => 0.556,       // underscore
+            '`' => 0.333,       // grave
+            'a' => 0.556,       // a
+            'b' => 0.556,       // b
+            'c' => 0.500,       // c
+            'd' => 0.556,       // d
+            'e' => 0.556,       // e
+            'f' => 0.278,       // f
+            'g' => 0.556,       // g
+            'h' => 0.556,       // h
+            'i' => 0.222,       // i
+            'j' => 0.222,       // j
+            'k' => 0.500,       // k
+            'l' => 0.222,       // l
+            'm' => 0.833,       // m
+            'n' => 0.556,       // n
+            'o' => 0.556,       // o
+            'p' => 0.556,       // p
+            'q' => 0.556,       // q
+            'r' => 0.333,       // r
+            's' => 0.500,       // s
+            't' => 0.278,       // t
+            'u' => 0.556,       // u
+            'v' => 0.500,       // v
+            'w' => 0.722,       // w
+            'x' => 0.500,       // x
+            'y' => 0.500,       // y
+            'z' => 0.500,       // z
+            '{' => 0.334,       // left brace
+            '|' => 0.260,       // pipe
+            '}' => 0.334,       // right brace
+            '~' => 0.584,       // tilde
+            _ => 0.556,         // default width for unknown characters
+        };
+
+        rusttype::HMetrics {
+            advance_width: advance_width,
+            left_side_bearing: 0.0, // Standard left side bearing for most characters
+        }
     }
 
     /// Returns the width of a string with this font and the given font size.
@@ -464,12 +569,22 @@ impl Font {
     ///
     /// [`FontCache`]: struct.FontCache.html
     pub fn str_width(&self, font_cache: &FontCache, s: &str, font_size: u8) -> Mm {
-        let str_width: Mm = font_cache
-            .get_rt_font(*self)
-            .glyphs_for(s.chars())
-            .map(|g| g.scaled(self.scale).h_metrics().advance_width)
-            .map(|w| Mm::from(printpdf::Pt(f32::from(w * f32::from(font_size)))))
-            .sum();
+        let str_width: Mm = if self.is_builtin {
+            // Use standardized metrics for built-in fonts
+            s.chars()
+                .map(|c| self.builtin_char_h_metrics(c).advance_width)
+                .map(|w| Mm::from(printpdf::Pt(f32::from(w * f32::from(font_size)))))
+                .sum()
+        } else {
+            // Use system font metrics for embedded fonts
+            font_cache
+                .get_rt_font(*self)
+                .glyphs_for(s.chars())
+                .map(|g| g.scaled(self.scale).h_metrics().advance_width)
+                .map(|w| Mm::from(printpdf::Pt(f32::from(w * f32::from(font_size)))))
+                .sum()
+        };
+
         let kerning_width: Mm = self
             .kerning(font_cache, s.chars())
             .into_iter()
@@ -491,18 +606,29 @@ impl Font {
     where
         I: IntoIterator<Item = char>,
     {
-        let font = font_cache.get_rt_font(*self);
-        font.glyphs_for(iter.into_iter())
-            .scan(None, |last, g| {
-                let pos = if let Some(last) = last {
-                    Some(font.pair_kerning(self.scale, *last, g.id()))
-                } else {
-                    Some(0.0)
-                };
-                *last = Some(g.id());
-                pos
-            })
-            .collect()
+        // Built-in PDF fonts already have their own (device) kerning information that the PDF
+        // viewer applies automatically. Passing additional kerning adjustments – especially ones
+        // derived from a *similar* but not identical system TTF – results in characters being
+        // pushed apart instead of pulled together. Therefore we disable kerning completely for
+        // built-in fonts and only return actual kerning values for embedded/system fonts.
+        if self.is_builtin {
+            // Return a zero adjustment for every glyph so the caller's `positions.zip(codepoints)`
+            // iterator remains the correct length.
+            iter.into_iter().map(|_| 0.0).collect()
+        } else {
+            let font = font_cache.get_rt_font(*self);
+            font.glyphs_for(iter.into_iter())
+                .scan(None, |last, g| {
+                    let pos = if let Some(last) = last {
+                        Some(font.pair_kerning(self.scale, *last, g.id()))
+                    } else {
+                        Some(0.0)
+                    };
+                    *last = Some(g.id());
+                    pos
+                })
+                .collect()
+        }
     }
 
     /// Returns the glyphs IDs for the given sequence of characters.

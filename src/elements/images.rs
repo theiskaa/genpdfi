@@ -296,7 +296,6 @@ mod tests {
     }
 
     fn test_position(size: Size, rotation: f32, position: Position) {
-        println!("rotation = {}", rotation);
         let rotation = Rotation::from(rotation);
         assert_approx_eq!(
             Position,
@@ -309,7 +308,6 @@ mod tests {
     fn test_bounding_box_size_square_0_deg() {
         let size = Size::new(100, 100);
         for rotation in &[-180.0, -90.0, 0.0, 90.0, 180.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(Size, size, bounding_box_offset_and_size(&rotation, &size).1);
         }
@@ -321,7 +319,6 @@ mod tests {
         let bb_width = (60.0f32.to_radians().sin() + 30.0f32.to_radians().sin()) * size.width.0;
         let bb_size = Size::new(bb_width, bb_width);
         for rotation in &[-150.0, -120.0, -30.0, -60.0, 30.0, 60.0, 120.0, 150.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,
@@ -337,7 +334,6 @@ mod tests {
         let bb_width = (2.0f32 * size.width.0.powf(2.0)).sqrt();
         let bb_size = Size::new(bb_width, bb_width);
         for rotation in &[-135.0, -45.0, 45.0, 135.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,
@@ -391,7 +387,6 @@ mod tests {
     fn test_bounding_box_size_rectangle_0_deg() {
         let size = Size::new(200, 100);
         for rotation in &[-180.0, 0.0, 180.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(Size, size, bounding_box_offset_and_size(&rotation, &size).1);
         }
@@ -406,7 +401,6 @@ mod tests {
             60.0f32.to_radians().sin() * size.height.0 + 30.0f32.to_radians().sin() * size.width.0;
         let bb_size = Size::new(bb_width, bb_height);
         for rotation in &[-150.0, -30.0, 30.0, 150.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,
@@ -422,7 +416,6 @@ mod tests {
         let bb_width = 45.0f32.to_radians().sin() * (size.width.0 + size.height.0);
         let bb_size = Size::new(bb_width, bb_width);
         for rotation in &[-135.0, -45.0, 45.0, 135.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,
@@ -441,7 +434,6 @@ mod tests {
             30.0f32.to_radians().sin() * size.height.0 + 60.0f32.to_radians().sin() * size.width.0;
         let bb_size = Size::new(bb_width, bb_height);
         for rotation in &[-120.0, -60.0, 60.0, 120.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,
@@ -456,7 +448,6 @@ mod tests {
         let size = Size::new(200, 100);
         let bb_size = Size::new(100, 200);
         for rotation in &[-90.0, 90.0] {
-            println!("rotation = {}", rotation);
             let rotation = Rotation::from(*rotation);
             assert_approx_eq!(
                 Size,

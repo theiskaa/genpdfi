@@ -345,8 +345,8 @@ impl<'p> Layer<'p> {
                 rotate: rotation,
                 scale_x: Some(scale.x),
                 scale_y: Some(scale.y),
-                dpi
-            }
+                dpi,
+            },
         );
     }
 
@@ -569,7 +569,7 @@ impl<'p> Area<'p> {
     /// *Only available if the `images` feature is enabled.*
     ///
     /// The position is assumed to be relative to the upper left hand corner of the area.
-    /// Your position will need to compensate for rotation/scale/dpi. Using [`Image`][]’s
+    /// Your position will need to compensate for rotation/scale/dpi. Using [`Image`][]'s
     /// render functionality will do this for you and is the recommended way to
     /// insert an image into an Area.
     ///
@@ -749,31 +749,42 @@ impl<'f, 'p> TextSection<'f, 'p> {
             self.is_first = false;
         }
 
-        let kerning_positions = font.kerning(self.font_cache, s.chars());
-        let positions = kerning_positions
-            .clone()
-            .into_iter()
-            .map(|pos| (pos * -1000.0) as i64);
-        let codepoints = if font.is_builtin() {
-            encode_win1252(s)?
-        } else {
-            font.glyph_ids(&self.font_cache, s.chars())
-        };
-
-        let font = self
+        let pdf_font = self
             .font_cache
             .get_pdf_font(font)
             .expect("Could not find PDF font in font cache");
         self.area.layer.set_fill_color(style.color());
-        self.set_font(font, style.font_size());
+        self.set_font(pdf_font, style.font_size());
 
-        self.area
-            .layer
-            .write_positioned_codepoints(positions, codepoints);
+        // For built-in fonts, emit text as whole words/strings to avoid character-by-character spacing
+        if font.is_builtin() {
+            // Use simple text emission for built-in fonts
+            // This avoids the character-by-character positioning that causes spacing issues
+            self.area.layer.data.layer.write_text(s, pdf_font);
+        } else {
+            // For embedded fonts, we still need precise positioning for proper kerning
+            let kerning_positions = font.kerning(self.font_cache, s.chars());
+            let positions = kerning_positions
+                .clone()
+                .into_iter()
+                .map(|pos| (-pos * 1000.0) as i64);
+            let codepoints = font.glyph_ids(&self.font_cache, s.chars());
 
-        let kerning_sum = Mm(kerning_positions.iter().sum::<f32>());
-        self.cumulative_kerning += kerning_sum;
-        self.current_x_offset += style.text_width(self.font_cache, s);
+            self.area
+                .layer
+                .write_positioned_codepoints(positions, codepoints);
+        }
+
+        // Update position tracking
+        let text_width = style.text_width(self.font_cache, s);
+        self.current_x_offset += text_width;
+
+        // For built-in fonts, we don't need kerning tracking since PDF viewers handle it
+        if !font.is_builtin() {
+            let kerning_positions = font.kerning(self.font_cache, s.chars());
+            let kerning_sum = Mm(kerning_positions.iter().sum::<f32>());
+            self.cumulative_kerning += kerning_sum;
+        }
 
         Ok(())
     }
@@ -829,7 +840,7 @@ impl<'f, 'p> TextSection<'f, 'p> {
         let positions = kerning_positions
             .clone()
             .into_iter()
-            .map(|pos| (pos * -1000.0) as i64);
+            .map(|pos| (-pos * 1000.0) as i64);
 
         let codepoints = if font.is_builtin() {
             encode_win1252(text)?
@@ -845,14 +856,26 @@ impl<'f, 'p> TextSection<'f, 'p> {
         self.area.layer.set_fill_color(style.color());
         self.set_font(pdf_font, style.font_size());
 
-        self.area
-            .layer
-            .write_positioned_codepoints(positions, codepoints);
+        // For built-in fonts, emit text as whole words/strings to avoid character-by-character spacing
+        if font.is_builtin() {
+            // Use simple text emission for built-in fonts
+            // This avoids the character-by-character positioning that causes spacing issues
+            self.area.layer.data.layer.write_text(text, pdf_font);
+        } else {
+            // For embedded fonts, we still need precise positioning for proper kerning
+            self.area
+                .layer
+                .write_positioned_codepoints(positions, codepoints);
+        }
 
         // Update position tracking
-        let kerning_sum = Mm(kerning_positions.iter().sum::<f32>());
-        self.cumulative_kerning += kerning_sum;
         self.current_x_offset += text_width;
+
+        // For built-in fonts, we don't need kerning tracking since PDF viewers handle it
+        if !font.is_builtin() {
+            let kerning_sum = Mm(kerning_positions.iter().sum::<f32>());
+            self.cumulative_kerning += kerning_sum;
+        }
 
         Ok(())
     }
