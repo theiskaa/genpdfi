@@ -256,6 +256,282 @@ impl FontData {
             .with_context(|| format!("Failed to open font file {}", path.as_ref().display()))?;
         FontData::new(data, builtin)
     }
+
+    /// Gets the raw font data bytes (for embedded fonts only).
+    ///
+    /// # Returns
+    /// * `Ok(&[u8])` - The raw font bytes for embedded fonts
+    /// * `Err(Error)` - If this is a built-in font (which has no raw data to extract)
+    pub fn get_data(&self) -> Result<&[u8], Error> {
+        match &self.raw_data {
+            RawFontData::Embedded(data) => Ok(data.as_ref()),
+            RawFontData::Builtin(_) => Err(Error::new(
+                "Cannot get raw data from built-in font".to_string(),
+                ErrorKind::InvalidFont,
+            )),
+        }
+    }
+
+    /// Checks if this font has a glyph for the given character.
+    ///
+    /// # Arguments
+    /// * `c` - The character to check
+    ///
+    /// # Returns
+    /// * `true` if the font contains a glyph for this character
+    /// * `false` if the character is missing (will render as .notdef/missing glyph)
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use genpdfi::fonts::FontData;
+    /// # let font_data = FontData::load("font.ttf", None).unwrap();
+    /// if font_data.has_glyph('ă') {
+    ///     println!("Font supports Romanian characters!");
+    /// }
+    /// ```
+    pub fn has_glyph(&self, c: char) -> bool {
+        // In rusttype, glyph ID 0 is the .notdef glyph (missing character indicator)
+        // If the glyph for a character has ID 0, the font doesn't support it
+        self.rt_font.glyph(c).id().0 != 0
+    }
+
+    /// Analyzes glyph coverage for the given text.
+    ///
+    /// This method checks which characters in the text are supported by this font
+    /// and returns detailed coverage statistics.
+    ///
+    /// # Arguments
+    /// * `text` - The text to analyze
+    ///
+    /// # Returns
+    /// A `GlyphCoverage` struct containing coverage statistics and missing characters
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// # use genpdfi::fonts::FontData;
+    /// # let font_data = FontData::load("font.ttf", None).unwrap();
+    /// let coverage = font_data.check_coverage("Hello ăâîșț!");
+    /// println!("Coverage: {:.1}%", coverage.coverage_percent());
+    /// if !coverage.is_complete() {
+    ///     println!("Missing characters: {:?}", coverage.missing_chars());
+    /// }
+    /// ```
+    pub fn check_coverage(&self, text: &str) -> GlyphCoverage {
+        let mut missing_chars = Vec::new();
+        let unique_chars: std::collections::HashSet<char> = text.chars().collect();
+
+        for c in unique_chars.iter() {
+            if !self.has_glyph(*c) {
+                missing_chars.push(*c);
+            }
+        }
+
+        GlyphCoverage {
+            total_unique: unique_chars.len(),
+            covered: unique_chars.len() - missing_chars.len(),
+            missing_chars,
+        }
+    }
+}
+
+/// Statistics about glyph coverage for a given text.
+///
+/// This struct provides information about how well a font supports the characters
+/// in a text string, useful for determining if font fallbacks are needed.
+#[derive(Clone, Debug)]
+pub struct GlyphCoverage {
+    /// Total number of unique characters in the analyzed text
+    total_unique: usize,
+    /// Number of characters that have glyphs in the font
+    covered: usize,
+    /// List of characters that are missing from the font
+    missing_chars: Vec<char>,
+}
+
+impl GlyphCoverage {
+    /// Returns the percentage of characters covered by the font (0-100).
+    pub fn coverage_percent(&self) -> f32 {
+        if self.total_unique == 0 {
+            100.0
+        } else {
+            (self.covered as f32 / self.total_unique as f32) * 100.0
+        }
+    }
+
+    /// Returns true if all characters are covered (100% coverage).
+    pub fn is_complete(&self) -> bool {
+        self.missing_chars.is_empty()
+    }
+
+    /// Returns the list of missing characters.
+    pub fn missing_chars(&self) -> &[char] {
+        &self.missing_chars
+    }
+
+    /// Returns the number of covered characters.
+    pub fn covered_count(&self) -> usize {
+        self.covered
+    }
+
+    /// Returns the total number of unique characters analyzed.
+    pub fn total_count(&self) -> usize {
+        self.total_unique
+    }
+}
+
+/// A font fallback chain for handling mixed-script documents.
+///
+/// This struct manages a primary font and a list of fallback fonts. When rendering text,
+/// it automatically selects the appropriate font for each character based on glyph coverage.
+///
+/// # Example
+/// ```rust,no_run
+/// use genpdfi::fonts::{FontData, FontFallbackChain};
+///
+/// let primary = FontData::load("NotoSans.ttf", None).unwrap();
+/// let cyrillic = FontData::load("NotoSansCyrillic.ttf", None).unwrap();
+/// let emoji = FontData::load("NotoEmoji.ttf", None).unwrap();
+///
+/// let chain = FontFallbackChain::new(primary)
+///     .with_fallback(cyrillic)
+///     .with_fallback(emoji);
+///
+/// // Automatically uses the right font for each character
+/// let font_for_a = chain.find_font_for_char('a');      // Uses primary (Noto Sans)
+/// let font_for_я = chain.find_font_for_char('я');      // Uses cyrillic fallback
+/// let font_for_emoji = chain.find_font_for_char('😀'); // Uses emoji fallback
+/// ```
+#[derive(Clone, Debug)]
+pub struct FontFallbackChain {
+    /// The primary font to try first
+    primary: FontData,
+    /// List of fallback fonts to try if primary doesn't have a character
+    fallbacks: Vec<FontData>,
+}
+
+impl FontFallbackChain {
+    /// Creates a new fallback chain with the given primary font.
+    pub fn new(primary: FontData) -> Self {
+        Self {
+            primary,
+            fallbacks: Vec::new(),
+        }
+    }
+
+    /// Adds a fallback font to the chain.
+    pub fn with_fallback(mut self, fallback: FontData) -> Self {
+        self.fallbacks.push(fallback);
+        self
+    }
+
+    /// Finds the best font in the chain for the given character.
+    ///
+    /// Returns a reference to the first font (starting with primary) that has
+    /// a glyph for this character. If no font in the chain supports the character,
+    /// returns the primary font (which will render the .notdef glyph).
+    pub fn find_font_for_char(&self, c: char) -> &FontData {
+        // Try primary first
+        if self.primary.has_glyph(c) {
+            return &self.primary;
+        }
+
+        // Try each fallback
+        for fallback in &self.fallbacks {
+            if fallback.has_glyph(c) {
+                return fallback;
+            }
+        }
+
+        // No font has it, return primary (will show .notdef)
+        &self.primary
+    }
+
+    /// Returns the primary font.
+    pub fn primary(&self) -> &FontData {
+        &self.primary
+    }
+
+    /// Returns the list of fallback fonts.
+    pub fn fallbacks(&self) -> &[FontData] {
+        &self.fallbacks
+    }
+
+    /// Analyzes coverage across the entire fallback chain for the given text.
+    ///
+    /// Returns statistics showing which characters are covered by any font in the chain
+    /// and which are still missing.
+    pub fn check_coverage(&self, text: &str) -> GlyphCoverage {
+        let unique_chars: std::collections::HashSet<char> = text.chars().collect();
+        let mut missing_chars = Vec::new();
+
+        for c in unique_chars.iter() {
+            // Check if ANY font in chain has this character
+            let has_glyph = self.primary.has_glyph(*c)
+                || self.fallbacks.iter().any(|f| f.has_glyph(*c));
+
+            if !has_glyph {
+                missing_chars.push(*c);
+            }
+        }
+
+        GlyphCoverage {
+            total_unique: unique_chars.len(),
+            covered: unique_chars.len() - missing_chars.len(),
+            missing_chars,
+        }
+    }
+
+    /// Segments text into chunks where each chunk uses a single font from the chain.
+    ///
+    /// This analyzes the text character by character, determining which font can render
+    /// each character, and groups consecutive characters using the same font into segments.
+    ///
+    /// # Returns
+    /// A vector of tuples (text_segment, font_data_ref) where each segment should be
+    /// rendered with the corresponding font.
+    ///
+    /// # Example
+    /// ```no_run
+    /// # use genpdfi::fonts::{FontData, FontFallbackChain};
+    /// # let primary = FontData::load("font.ttf", None).unwrap();
+    /// # let fallback = FontData::load("fallback.ttf", None).unwrap();
+    /// let chain = FontFallbackChain::new(primary).with_fallback(fallback);
+    /// let segments = chain.segment_text("Hello мир!");
+    /// // Returns: [("Hello ", &primary_font), ("мир", &fallback_font), ("!", &primary_font)]
+    /// ```
+    pub fn segment_text(&self, text: &str) -> Vec<(String, &FontData)> {
+        let mut segments = Vec::new();
+        let mut current_segment = String::new();
+        let mut current_font: Option<&FontData> = None;
+
+        for c in text.chars() {
+            let font_for_char = self.find_font_for_char(c);
+
+            // If font changed, flush current segment
+            if let Some(current) = current_font {
+                if !std::ptr::eq(current, font_for_char) {
+                    if !current_segment.is_empty() {
+                        segments.push((current_segment.clone(), current));
+                        current_segment.clear();
+                    }
+                    current_font = Some(font_for_char);
+                }
+            } else {
+                current_font = Some(font_for_char);
+            }
+
+            current_segment.push(c);
+        }
+
+        // Flush remaining segment
+        if !current_segment.is_empty() {
+            if let Some(font) = current_font {
+                segments.push((current_segment, font));
+            }
+        }
+
+        segments
+    }
 }
 
 #[derive(Clone, Debug)]
