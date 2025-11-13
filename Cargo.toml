@@ -15,6 +15,7 @@ readme = "README.md"
 [dependencies]
 lopdf = "0.26"
 rusttype = "0.8"
+hb-subset = { version = "0.3", features = ["bundled"] }
 
 [dependencies.image]
 version = "0.24.9"
