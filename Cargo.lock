@@ -326,7 +326,7 @@ checksum = "7ab85b9b05e3978cc9a9cf8fea7f01b494e1a09ed3037e16ba39edc7a29eb61a"
 
 [[package]]
 name = "genpdfi"
-version = "0.2.4"
+version = "0.2.5"
 dependencies = [
  "derive_more",
  "float-cmp",
