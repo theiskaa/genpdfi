@@ -1,11 +1,12 @@
-//! Font subsetting module using HarfBuzz.
+//! Font subsetting module using the subsetter crate.
 //!
 //! This module provides functionality to create subset fonts that contain only
 //! the glyphs actually used in a document, significantly reducing PDF file sizes.
 
 use crate::error::{Error, ErrorKind};
-use hb_subset::subset;
 use std::collections::HashSet;
+use subsetter::{subset, GlyphRemapper};
+use ttf_parser::Face;
 
 /// Creates a subset of a font containing only the specified characters.
 ///
@@ -29,9 +30,23 @@ use std::collections::HashSet;
 /// assert!(subset.len() < font_data.len());
 /// ```
 pub fn subset_font(font_data: &[u8], text: &str) -> Result<Vec<u8>, Error> {
-    // The subset() function takes font data and an iterator of characters
-    // It automatically handles glyph mapping and subsetting
-    let result = subset(font_data, text.chars()).map_err(|e| {
+    let face = Face::parse(font_data, 0).map_err(|e| {
+        Error::new(
+            format!("Failed to parse font: {:?}", e),
+            ErrorKind::InvalidFont,
+        )
+    })?;
+
+    let mut remapper = GlyphRemapper::new();
+    remapper.remap(0);
+
+    for ch in text.chars() {
+        if let Some(glyph_id) = face.glyph_index(ch) {
+            remapper.remap(glyph_id.0);
+        }
+    }
+
+    let result = subset(font_data, 0, &remapper).map_err(|e| {
         Error::new(
             format!("Font subsetting failed: {:?}", e),
             ErrorKind::InvalidFont,
